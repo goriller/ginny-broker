@@ -1,2 +1,2 @@
-# ginny-kafka
-Kafka provider for ginny
+# ginny-broker
+broker provider for ginny
