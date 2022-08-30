@@ -38,6 +38,7 @@ type kafkaOpts struct {
 	defaultQueue string
 	addr         []string
 	version      sarama.KafkaVersion
+	logger       *zap.Logger
 }
 
 func init() {
@@ -45,7 +46,7 @@ func init() {
 }
 
 // Init for init
-func (k *kafkaBroker) Init(ctx context.Context, u *url.URL) error {
+func (k *kafkaBroker) Init(ctx context.Context, log *zap.Logger, u *url.URL) error {
 	var cAddrs []string
 	if u.Host != "" {
 		cAddrs = strings.Split(u.Host, ",")
@@ -72,6 +73,7 @@ func (k *kafkaBroker) Init(ctx context.Context, u *url.URL) error {
 		version:      v,
 		defaultQueue: defaultQueue,
 		addr:         cAddrs,
+		logger:       log,
 	}
 	return k.connect(ctx)
 }
@@ -183,6 +185,7 @@ func (k *kafkaBroker) Subscribe(ctx context.Context, topics []string,
 		handler: handler,
 		cg:      cg,
 		autoAck: autoAck,
+		logger:  k.opts.logger,
 	}
 	go func() {
 		for {
@@ -246,6 +249,7 @@ type consumerGroupHandler struct {
 	handler broker.Handler
 	cg      sarama.ConsumerGroup
 	autoAck bool
+	logger  *zap.Logger
 }
 
 // Setup Setup
@@ -269,7 +273,7 @@ func (h *consumerGroupHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, cl
 		if err == nil && h.autoAck {
 			sess.MarkMessage(msg, "")
 		} else if err != nil {
-			zap.S().With("action", "kafka").Errorf("subscriber error %v", p.err)
+			h.logger.With(zap.String("action", "kafka")).Error("subscriber error", zap.Error(p.err))
 		}
 	}
 	return nil

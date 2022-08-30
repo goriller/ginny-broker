@@ -4,6 +4,8 @@ package broker
 import (
 	"context"
 	"net/url"
+
+	"go.uber.org/zap"
 )
 
 // Broker broker for message queue.
@@ -14,7 +16,7 @@ type Broker struct {
 // mq is an interface used for CloudEvents asynchronous messaging.
 type mq interface {
 	// Init 连接
-	Init(ctx context.Context, uri *url.URL) error
+	Init(ctx context.Context, log *zap.Logger, uri *url.URL) error
 	// Close 断开连接
 	Close(ctx context.Context) error
 	// Publish 发送消息
@@ -49,14 +51,14 @@ func RegisterImplements(scheme string, i mq) {
 }
 
 // Init 初始化
-func (b *Broker) Init(ctx context.Context, u *url.URL) error {
+func (b *Broker) Init(ctx context.Context, log *zap.Logger, u *url.URL) error {
 	for k, v := range implements {
 		if k == u.Scheme {
 			b.mq = v
 		}
 	}
 	if b.mq != nil {
-		return b.mq.Init(ctx, u)
+		return b.mq.Init(ctx, log, u)
 	}
 	return nil
 }

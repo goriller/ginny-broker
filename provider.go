@@ -7,13 +7,14 @@ import (
 	"net/url"
 
 	"github.com/google/wire"
+	"go.uber.org/zap"
 )
 
 // BrokerProvider
 var BrokerProvider = wire.NewSet(NewBroker)
 
 // NewBroker
-func NewBroker(ctx context.Context, dsn string) (*Broker, error) {
+func NewBroker(ctx context.Context, log *zap.Logger, dsn string) (*Broker, error) {
 	if dsn == "" {
 		return nil, errors.New("broker dsn is empty")
 	}
@@ -22,7 +23,7 @@ func NewBroker(ctx context.Context, dsn string) (*Broker, error) {
 		return nil, fmt.Errorf("dependency %s parse uri %s error for %w", "broker", dsn, errParse)
 	}
 	broker := &Broker{}
-	err := broker.Init(ctx, uri)
+	err := broker.Init(ctx, log, uri)
 	if err != nil {
 		return nil, err
 	}
