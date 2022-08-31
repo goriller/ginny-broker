@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/Shopify/sarama"
 	"github.com/google/uuid"
@@ -132,6 +133,9 @@ func (k *kafkaBroker) connect(_ context.Context) error {
 	// to be set to true in its configuration.
 	pconfig.Producer.Return.Successes = true
 	pconfig.Producer.Return.Errors = true
+	pconfig.Producer.Retry.Max = 5
+	pconfig.Producer.RequiredAcks = sarama.WaitForLocal
+
 	c, err := sarama.NewClient(k.opts.addr, pconfig)
 	if err != nil {
 		return err
@@ -187,21 +191,23 @@ func (k *kafkaBroker) Subscribe(ctx context.Context, topics []string,
 		autoAck: autoAck,
 		logger:  k.opts.logger,
 	}
+
 	go func() {
 		for {
 			select {
 			case err := <-cg.Errors():
 				if !errors.Is(err, nil) {
-					zap.S().Errorf("consumer error: %v", err)
+					k.opts.logger.With(zap.String("action", "kafka")).Error("consumer error", zap.Error(err))
 				}
 			default:
 				err := cg.Consume(ctx, topics, h)
-				if errors.Is(err, sarama.ErrClosedConsumerGroup) {
-					return
-				} else if errors.Is(err, nil) {
+				if err == nil {
 					continue
 				}
-				zap.S().Error(err)
+				if errors.Is(err, sarama.ErrClosedConsumerGroup) {
+					return
+				}
+				k.opts.logger.With(zap.String("action", "kafka")).Error("err", zap.Error(err))
 			}
 		}
 	}()
@@ -234,6 +240,9 @@ func (k *kafkaBroker) getSaramaClusterClient() (sarama.Client, error) {
 	clusterConfig.Version = k.opts.version
 	clusterConfig.Consumer.Return.Errors = true
 	clusterConfig.Consumer.Offsets.Initial = sarama.OffsetNewest
+	clusterConfig.Consumer.Offsets.CommitInterval = 1 * time.Second
+	clusterConfig.Consumer.Group.Rebalance.Strategy = sarama.BalanceStrategyRange
+
 	cs, err := sarama.NewClient(k.opts.addr, clusterConfig)
 	if err != nil {
 		return nil, err
